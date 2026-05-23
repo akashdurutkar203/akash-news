@@ -32,7 +32,7 @@ export function useNewsFetch(category, debouncedSearchQuery, gnewsApiKey) {
   ) {
     setArticles([]);
     setPage(1);
-    setHasMore(gnewsApiKey && gnewsApiKey.trim() !== '' ? true : false);
+    setHasMore(true);
     setError(null);
     setPrevFilters({
       category,
@@ -42,11 +42,6 @@ export function useNewsFetch(category, debouncedSearchQuery, gnewsApiKey) {
   }
 
   useEffect(() => {
-    // If no key is configured, yield and wait for onboarding
-    if (!gnewsApiKey || gnewsApiKey.trim() === '') {
-      return;
-    }
-
     let active = true;
     let timeoutId = null;
 
@@ -59,34 +54,59 @@ export function useNewsFetch(category, debouncedSearchQuery, gnewsApiKey) {
       setError(null);
 
       try {
-        let fetchUrl = '';
         const limit = 10; // GNews free tier limit
+        let fetchUrl = `/api/news?page=${page}`;
+
+        if (gnewsApiKey && gnewsApiKey.trim() !== '') {
+          fetchUrl += `&token=${encodeURIComponent(gnewsApiKey.trim())}`;
+        }
 
         if (debouncedSearchQuery && debouncedSearchQuery.trim() !== '') {
           // Search mode
-          fetchUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(
-            debouncedSearchQuery
-          )}&lang=en&token=${gnewsApiKey}&page=${page}&max=${limit}`;
+          fetchUrl += `&q=${encodeURIComponent(debouncedSearchQuery.trim())}`;
         } else {
           // Headlines mode
           const gnewsCategory = category === 'all' ? 'general' : category;
-          fetchUrl = `https://gnews.io/api/v4/top-headlines?category=${gnewsCategory}&lang=en&token=${gnewsApiKey}&page=${page}&max=${limit}`;
+          fetchUrl += `&category=${gnewsCategory}`;
         }
 
-        const response = await fetch(fetchUrl);
+        let response = await fetch(fetchUrl);
         
         if (!active) return;
+
+        // Detect if Vite dev server is serving the static api/news.js file instead of Vercel running the serverless function
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('javascript') || contentType.includes('text/html') || contentType.includes('text/plain')) {
+          // Fallback to direct GNews API call (allowed on localhost by GNews CORS policy)
+          const fallbackToken = gnewsApiKey || import.meta.env.VITE_GNEWS_API_KEY || '';
+          if (!fallbackToken || fallbackToken.trim() === '') {
+            throw new Error('No API Key was provided. Please configure it in Settings.');
+          }
+
+          let fallbackUrl = '';
+          if (debouncedSearchQuery && debouncedSearchQuery.trim() !== '') {
+            fallbackUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(
+              debouncedSearchQuery.trim()
+            )}&lang=en&token=${fallbackToken.trim()}&page=${page}&max=${limit}`;
+          } else {
+            const gnewsCategory = category === 'all' ? 'general' : category;
+            fallbackUrl = `https://gnews.io/api/v4/top-headlines?category=${gnewsCategory}&lang=en&token=${fallbackToken.trim()}&page=${page}&max=${limit}`;
+          }
+
+          response = await fetch(fallbackUrl);
+          if (!active) return;
+        }
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            errorData.errors 
-              ? errorData.errors.join(', ') 
-              : (errorData.message || `HTTP request failed with status: ${response.status}`)
+            errorData.message || `HTTP request failed with status: ${response.status}`
           );
         }
 
         const data = await response.json();
+
+
         
         if (!active) return;
 

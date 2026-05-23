@@ -34,6 +34,13 @@ function MainLayout() {
   const [onboardingKey, setOnboardingKey] = useState('');
   const [onboardingShowKey, setOnboardingShowKey] = useState(false);
 
+  // Show onboarding only if we do not have a local API key AND the backend returns an API key missing error
+  const isApiKeyMissing = !gnewsApiKey && error && (
+    error.includes('Missing API Key') || 
+    error.includes('No GNews API Key') || 
+    error.includes('API key')
+  );
+
   const handleOnboardingSubmit = (e) => {
     e.preventDefault();
     if (onboardingKey.trim()) {
@@ -85,7 +92,7 @@ function MainLayout() {
       />
 
       {/* Conditional setup overlay or full interface render */}
-      {!gnewsApiKey ? (
+      {isApiKeyMissing ? (
         <div className="flex-grow flex items-center justify-center py-16 px-4 relative z-10">
           <div className="w-full max-w-md glass-panel rounded-2xl p-8 border border-white/10 shadow-[0_15px_35px_rgba(0,0,0,0.5)] animate-fade-in text-center space-y-6">
             <div className="inline-flex p-3 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
@@ -110,9 +117,9 @@ function MainLayout() {
                     GNews API Access Key
                   </label>
                   <button
-                    type="button"
-                    onClick={() => setOnboardingShowKey(!onboardingShowKey)}
-                    className="text-[10px] text-blue-400 font-bold uppercase hover:underline cursor-pointer"
+                     type="button"
+                     onClick={() => setOnboardingShowKey(!onboardingShowKey)}
+                     className="text-[10px] text-blue-400 font-bold uppercase hover:underline cursor-pointer"
                   >
                     {onboardingShowKey ? 'Hide' : 'Show'}
                   </button>
@@ -178,7 +185,7 @@ function MainLayout() {
             articles={getDisplayArticles()}
             loading={loading && !showBookmarksOnly} // Bookmarks resolve instantly, no shimmer needed
             loadingMore={loadingMore && !showBookmarksOnly}
-            error={error}
+            error={error && !isApiKeyMissing ? error : null} // Hide API key errors from grid if we handle them
             showBookmarksOnly={showBookmarksOnly}
             hasMore={hasMore}
             onLoadMore={loadMore}
